@@ -3,6 +3,10 @@
 <head>
     <title>Daily Picking Calculator</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <!-- Include Luxon for robust date/time handling -->
+    <script src="https://cdn.jsdelivr.net/npm/luxon@3/build/global/luxon.min.js"></script>
+
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -42,7 +46,7 @@
         }
         #result {
             position: absolute;
-            top: 40px; /* Moved down ~1cm from the top */
+            top: 40px; /* Moved ~1cm from the top */
             right: 10px;
             background-color: #00A1DE; /* Kuehne+Nagel Light Blue */
             color: white;
@@ -62,7 +66,7 @@
             border-radius: 5px;
             font-size: 1em;
             z-index: 100;
-            cursor: pointer; /* Indicate it's clickable to show history */
+            cursor: pointer; /* Show it's clickable to show history */
         }
         /* The pop-up history overlay (hidden by default) */
         #hourlyHistory {
@@ -147,8 +151,8 @@
         <button onclick="closeHistory()">Close</button>
     </div>
 
-    <!-- Make sure kn.png is in the SAME folder as this index.html -->
-    <img id="logo" src="kn.png" alt="Kuehne+Nagel Logo" width="300">
+    <!-- Logo file: must be in the same folder as this index.html -->
+    <img id="logo" src="./kn.png" alt="Kuehne+Nagel Logo" width="300">
 
     <div id="textContainer">
         <textarea 
@@ -217,8 +221,8 @@
         document.addEventListener('click', showKeyboard);
 
         /* 
-           DAILY TOTAL CALCULATION & COLOR CHANGE 
-           - Only parse the first integer per line 
+           DAILY TOTAL & COLOR-CODING 
+           - Only parse the first integer per line
            - Daily target = 1200
         */
         const dailyTarget = 1200;
@@ -227,73 +231,71 @@
             const resultElement = document.getElementById('result');
 
             let color = "red"; // Default color
-
             if (percentage >= 100) {
-                color = "green"; // Full target met or exceeded
+                color = "green"; 
             } else if (percentage >= 70) {
-                color = "yellow"; // Getting closer to the target
+                color = "yellow";
             } else if (percentage >= 40) {
-                color = "orange"; // Midway
+                color = "orange";
             }
-
-            // Apply the color and make the number bold
             resultElement.innerHTML = `Total: <span style="color: ${color}; font-weight: bold;">${total}</span>`;
         }
 
-        // HOURLY TARGET LOGIC
+        /* 
+           HOURLY TARGET LOGIC
+           - 155 boxes/hour
+           - Each hour from the first pick
+         */
         const HOURLY_TARGET = 155;
-        let startTime; // Time of the very first pick
+        let startTime; // Time of the very first pick (millis)
         let picksPerHour = []; // Array storing total picks for each hour
 
         function getCurrentHourIndex() {
             if (!startTime) return 0;
-            const now = Date.now();
+            const now = luxon.DateTime.now().toMillis();
             const diffMs = now - startTime; 
-            const diffHours = Math.floor(diffMs / 3600000); // integer hours passed
-            return diffHours; 
+            const diffHours = Math.floor(diffMs / 3600000);
+            return diffHours;
         }
 
-        // Recalculate how many have been picked each hour from the entire text
         function recalcHourlyPicks(lines) {
             // If no startTime, set it now
             if (!startTime) {
-                startTime = Date.now();
-                localStorage.setItem('startTime', startTime.toString());
+                startTime = luxon.DateTime.now().toMillis();
+                localStorage.setItem('startTime', String(startTime));
             }
-            // Reset picksPerHour from stored lines
             picksPerHour = [];
 
-            // We'll re-create picksPerHour from 'pickTimestamps' in localStorage
+            // Get stored timestamps
             let pickTimestamps = JSON.parse(localStorage.getItem('pickTimestamps') || '[]');
 
             pickTimestamps.forEach((tsObj, index) => {
                 const lineValue = parseInt(lines[index].trim().split(' ')[0] || '0', 10);
-                if (isNaN(lineValue)) return; // skip non-numbers
+                if (isNaN(lineValue)) return;
 
                 const hoursSinceStart = Math.floor((tsObj - startTime) / 3600000);
                 picksPerHour[hoursSinceStart] = (picksPerHour[hoursSinceStart] || 0) + lineValue;
             });
         }
 
-        // Show how many are left in the current hour
         function updateHourlyTargetDisplay() {
             const hourIndex = getCurrentHourIndex();
             const currentHourPick = picksPerHour[hourIndex] || 0;
             const left = HOURLY_TARGET - currentHourPick;
             const hourTargetElem = document.getElementById('hourlyTarget');
 
-            hourTargetElem.innerText = `Hour #${hourIndex}: ` + (left > 0 
-                ? `${left} left` 
-                : `Target Met (${Math.abs(left)} over)`);
+            if (left > 0) {
+                hourTargetElem.innerText = `Hour #${hourIndex}: ${left} left`;
+            } else {
+                hourTargetElem.innerText = `Hour #${hourIndex}: Target Met (${Math.abs(left)} over)`;
+            }
         }
 
-        // Show hourly history overlay
         document.getElementById('hourlyTarget').addEventListener('click', showHourlyHistory);
-
         function showHourlyHistory() {
             let html = "";
             for (let i = 0; i < picksPerHour.length; i++) {
-                if (picksPerHour[i] == null) continue; 
+                if (picksPerHour[i] == null) continue;
                 const val = picksPerHour[i];
                 if (val >= HOURLY_TARGET) {
                     html += `<p>Hour #${i}: ${val} picked → Reached target! ✅</p>`;
@@ -303,9 +305,7 @@
                     html += `<p>Hour #${i}: ${val} picked → Needs Improvement ❌</p>`;
                 }
             }
-            if (!html) {
-                html = "<p>No data yet</p>";
-            }
+            if (!html) html = "<p>No data yet</p>";
             document.getElementById('hourlyHistoryContent').innerHTML = html;
             document.getElementById('hourlyHistory').style.display = 'block';
         }
@@ -313,12 +313,13 @@
             document.getElementById('hourlyHistory').style.display = 'none';
         }
 
-        /* 
-           MAIN CALCULATION + LOCAL STORAGE
-           Each time the user types, we run calculatePicking() 
+        /*
+           MAIN CALCULATION & LOCAL STORAGE
+           Each line is recognized as one pick. We store a timestamp for each line.
         */
         const dailyStorageKey = "pickingNumbers_" + window.location.hostname;
 
+        // Called whenever the user modifies the textarea or enters digits
         function calculatePicking() {
             const input = document.getElementById('pickingNumbers').value;
             const lines = input.split('\n');
@@ -327,70 +328,68 @@
             lines.forEach(line => {
                 const firstChunk = line.trim().split(' ')[0];
                 const firstNumber = parseInt(firstChunk, 10);
-                if (!isNaN(firstNumber)) {
-                    total += firstNumber;
-                }
+                if (!isNaN(firstNumber)) total += firstNumber;
             });
 
-            // Update daily color
-            updateTotalColor(total);
+            updateTotalColor(total);        // Update daily total color
+            recalcHourlyPicks(lines);       // Recalc hourly picks
+            updateHourlyTargetDisplay();    // Update the "Hour #X: left/over"
 
-            // Recalc hourly logic
-            recalcHourlyPicks(lines);
-            updateHourlyTargetDisplay();
-            
-            // Save to local storage
             saveNumbers();
         }
 
+        // Sync the main text with Local Storage
         function saveNumbers() {
             const textarea = document.getElementById('pickingNumbers');
             localStorage.setItem(dailyStorageKey, textarea.value);
         }
 
-        // We'll store a timestamp per line in localStorage
-        function addTimestampIfNeeded() {
+        // Maintain timestamps array for each line
+        function syncTimestampsWithLines() {
             const input = document.getElementById('pickingNumbers').value;
             const lines = input.split('\n');
+
             let pickTimestamps = JSON.parse(localStorage.getItem('pickTimestamps') || '[]');
 
-            // If we have more lines than timestamps, add new timestamps for new lines
+            // If we have more lines than timestamps, add new timestamps
             while (pickTimestamps.length < lines.length) {
-                pickTimestamps.push(Date.now());
+                pickTimestamps.push(luxon.DateTime.now().toMillis());
             }
+            // If we have fewer lines than timestamps, remove the excess
+            while (pickTimestamps.length > lines.length) {
+                pickTimestamps.pop();
+            }
+
             localStorage.setItem('pickTimestamps', JSON.stringify(pickTimestamps));
         }
 
-        // We override the old 'addNumber' approach so each press updates instantly
+        // On custom keyboard click
         function handleNumberEntry(num) {
             const textarea = document.getElementById('pickingNumbers');
-            textarea.value += num; 
-            // Immediately store a timestamp for new lines if needed
-            addTimestampIfNeeded();
-            // Calculate picking right away
-            calculatePicking();
-            // Show keyboard again
-            showKeyboard();
+            textarea.value += num;
+            syncTimestampsWithLines(); // Keep timestamps in sync with new or removed lines
+            calculatePicking();        // Recalc everything instantly
+            showKeyboard();            // Keep the keyboard visible
         }
 
-        // CLEAR
+        // On the "Clear" button
         function clearNumbers() {
             document.getElementById('pickingNumbers').value = '';
-            localStorage.removeItem(dailyStorageKey); // Clear main storage
+            localStorage.removeItem(dailyStorageKey);
             localStorage.removeItem('pickTimestamps');
-            startTime = null; 
+            startTime = null;
             picksPerHour = [];
             updateTotalColor(0);
             updateHourlyTargetDisplay();
         }
 
-        // LOAD on page start
+        // Page Load
         window.onload = function() {
             // Cookie check
             if (!document.cookie.includes("cookieAccepted=true")) {
                 document.getElementById('cookieMessage').style.display = 'block';
             }
-            // Load the saved data
+            // Load stored picks
             const savedData = localStorage.getItem(dailyStorageKey);
             if (savedData) {
                 document.getElementById('pickingNumbers').value = savedData;
@@ -400,7 +399,9 @@
             if (st) {
                 startTime = parseInt(st, 10);
             }
-            // Trigger initial calc
+            // Keep timestamps array in sync (in case user removed lines manually before refresh)
+            syncTimestampsWithLines();
+            // Calculate from the start
             calculatePicking();
         };
     </script>
