@@ -105,6 +105,18 @@
             z-index: 20;
         }
     </style>
+
+    <style>
+    #logo {
+        position: fixed;
+        top: 50%; /* Perfectly centered vertically */
+        left: 50%; /* Perfectly centered horizontally */
+        transform: translate(-50%, -50%);
+        z-index: 0;
+        opacity: 0.1;
+        pointer-events: none; /* Ensures the logo doesn't interfere with scrolling or interaction */
+    }
+    </style>
 </head>
 <body>
 
