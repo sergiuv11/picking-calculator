@@ -4,11 +4,10 @@
     <title>Daily Picking Calculator</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
-        /* ===== BODY & LAYOUT ===== */
         body {
             font-family: Arial, sans-serif;
             margin: 0;
-            /* Freed up scrolling control */
+            /* Removed overflow: hidden so we can freely control container size */
             display: flex;
             flex-direction: column;
             justify-content: center;
@@ -18,22 +17,20 @@
             background-color: #00427A; /* Kuehne+Nagel Dark Blue */
             position: relative;
         }
-
-        /* ===== SCROLLABLE TEXT CONTAINER ===== */
+        /* Container that holds the textarea and scrolls above the keyboard */
         #textContainer {
             position: absolute;
             top: 0;
-            left: 0;
+            left: 0; 
             right: 0;
-            bottom: 0;
-            overflow-y: auto;
+            bottom: 0; /* Will be adjusted by JS when the keyboard is shown/hidden */
+            overflow-y: auto; /* Enable scrolling */
             box-sizing: border-box;
         }
-
-        /* ===== TEXT AREA ===== */
+        /* The actual textarea for picking numbers */
         #pickingNumbers {
             width: 100%;
-            min-height: 100%;
+            min-height: 100%; /* So it fills the container and can scroll */
             box-sizing: border-box;
             border: none;
             outline: none;
@@ -43,11 +40,9 @@
             background-color: rgba(242, 242, 242, 0.9); /* Light Gray with transparency */
             color: #00427A; /* Kuehne+Nagel Dark Blue Text */
         }
-
-        /* ===== RESULT DISPLAY (COLORED TOTAL) ===== */
         #result {
             position: absolute;
-            top: 40px; /* Moved down ~1cm from the top */
+            top: 40px; /* Moved down 1cm from the top */
             right: 10px;
             background-color: #00A1DE; /* Kuehne+Nagel Light Blue */
             color: white;
@@ -56,26 +51,61 @@
             font-size: 1.5em;
             z-index: 100; /* Ensure it stays on top */
         }
-
-        /* ===== LOGO IN THE MIDDLE (45% DOWN) ===== */
+        /* New: container for the hourly info */
+        #hourlyTarget {
+            position: absolute;
+            top: 100px; /* below #result */
+            right: 10px;
+            background-color: #00A1DE;
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 1em;
+            z-index: 100;
+            cursor: pointer; /* Indicate it's clickable to show history */
+        }
+        /* The pop-up history overlay (hidden by default) */
+        #hourlyHistory {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: rgba(0,0,0,0.8);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            display: none; /* Shown on click */
+            z-index: 999;
+            max-width: 80%;
+        }
+        #hourlyHistory h2 {
+            margin-top: 0;
+        }
+        #hourlyHistory button {
+            margin-top: 15px;
+            background-color: #00A1DE;
+            color: white;
+            border: none;
+            padding: 10px;
+            border-radius: 5px;
+            cursor: pointer;
+        }
         #logo {
             position: fixed;
-            top: 45%; /* Adjusted to appear more centered */
+            top: 45%; /* A bit more down than the center */
             left: 50%;
             transform: translate(-50%, -50%);
             z-index: 0;
-            opacity: 0.1;
-            pointer-events: none; /* Doesn’t interfere with scrolling or taps */
+            opacity: 0.15; /* A bit more visible than 0.1 */
+            pointer-events: none; /* Ensures the logo doesn't interfere with scrolling or interaction */
         }
-
-        /* ===== CUSTOM NUMBER KEYBOARD ===== */
         #numberKeyboard {
             position: fixed;
             bottom: 0;
             left: 0;
             right: 0;
             background-color: #00A1DE;
-            display: none; /* Shown via JS */
+            display: none; /* We'll show this in JS when needed */
             grid-template-columns: repeat(3, 1fr);
             gap: 5px;
             padding: 10px;
@@ -90,8 +120,7 @@
             border-radius: 5px;
             cursor: pointer;
         }
-
-        /* ===== COOKIE MESSAGE (OPTIONAL) ===== */
+        /* If you still need the cookie message */
         #cookieMessage {
             position: fixed;
             bottom: 20px;
@@ -105,37 +134,29 @@
             z-index: 20;
         }
     </style>
-
-    <style>
-    #logo {
-        position: fixed;
-        top: 50%; /* Perfectly centered vertically */
-        left: 50%; /* Perfectly centered horizontally */
-        transform: translate(-50%, -50%);
-        z-index: 0;
-        opacity: 0.1;
-        pointer-events: none; /* Ensures the logo doesn't interfere with scrolling or interaction */
-    }
-    </style>
 </head>
 <body>
 
-    <!-- RESULT BOX -->
     <div id="result">Total: 0</div>
+    <!-- New container for hourly display -->
+    <div id="hourlyTarget">Hour #0: 155 left</div>
+    <!-- Hidden overlay for hourly history -->
+    <div id="hourlyHistory">
+        <h2>Hourly History</h2>
+        <div id="hourlyHistoryContent"></div>
+        <button onclick="closeHistory()">Close</button>
+    </div>
 
-    <!-- LOGO (ALWAYS VISIBLE IN THE MIDDLE) -->
     <img id="logo" src="kn.png" alt="Kuehne+Nagel Logo" width="300">
 
-    <!-- SCROLLABLE CONTAINER & TEXTAREA -->
     <div id="textContainer">
-        <textarea
-            id="pickingNumbers"
-            placeholder="Enter Picking Numbers..."
+        <textarea 
+            id="pickingNumbers" 
+            placeholder="Enter Picking Numbers..." 
             oninput="calculatePicking()">
         </textarea>
     </div>
 
-    <!-- CUSTOM NUMBER KEYBOARD -->
     <div id="numberKeyboard">
         <button onclick="addNumber('1')">1</button>
         <button onclick="addNumber('2')">2</button>
@@ -151,22 +172,15 @@
         <button onclick="clearNumbers()">Clear</button>
     </div>
 
-    <!-- OPTIONAL COOKIE MESSAGE -->
+    <!-- Cookie Message (optional) -->
     <div id="cookieMessage">
         Welcome! Tap once to enter Fullscreen. Triple tap to exit. This message won't show again once acknowledged.
         <button onclick="acknowledgeCookie()" style="background-color: white; color: #00427A; padding: 5px; border: none; cursor: pointer;">OK</button>
     </div>
 
-    <!-- MAIN SCRIPT: Calculation, Keyboard, Fullscreen, Etc. -->
     <script>
-        /* ======================= CONSTANTS & INITIAL SETUP ======================= */
-        const target = 1200; // For dynamic color calculation
-        let wakeLock = null; // For preventing screen sleep
-        let keyboardTimeout; // For auto-hiding the keyboard
-        let tapCount = 0;    // For fullscreen logic
-        let tapTimeout;
-
-        /* ======================= PREVENT SCREEN SLEEP ======================= */
+        /* KEEP SCREEN AWAKE */
+        let wakeLock = null;
         function preventSleep() {
             if ('wakeLock' in navigator) {
                 navigator.wakeLock.request('screen')
@@ -175,39 +189,244 @@
             }
         }
         preventSleep();
-
-        // Re-acquire the lock on visibility change
         document.addEventListener('visibilitychange', () => {
             if (document.visibilityState === 'visible') {
                 preventSleep();
             }
         });
 
-        /* ======================= LOCAL STORAGE (SAVE/LOAD) ======================= */
-        const STORAGE_KEY = "pickingNumbers_" + window.location.hostname;
+        /* KEYBOARD AUTO-HIDE AFTER 15 SECONDS */
+        let keyboardTimeout;
+        function showKeyboard() {
+            const kb = document.getElementById('numberKeyboard');
+            kb.style.display = 'grid';
+            // Adjust the scrollable container to sit above the keyboard's height
+            const kbHeight = kb.offsetHeight;
+            document.getElementById('textContainer').style.bottom = kbHeight + 'px';
 
+            clearTimeout(keyboardTimeout);
+            keyboardTimeout = setTimeout(hideKeyboard, 15000); // Hide after 15s of inactivity
+        }
+        function hideKeyboard() {
+            const kb = document.getElementById('numberKeyboard');
+            kb.style.display = 'none';
+            // Extend container to bottom again
+            document.getElementById('textContainer').style.bottom = '0';
+        }
+
+        document.addEventListener('click', showKeyboard);
+
+        /* 
+           DAILY TOTAL CALCULATION & COLOR CHANGE 
+           - Only parse the first integer per line 
+           - Daily target = 1200
+        */
+        const dailyTarget = 1200;
+        function updateTotalColor(total) {
+            const percentage = (total / dailyTarget) * 100;
+            const resultElement = document.getElementById('result');
+
+            let color = "red"; // Default color
+
+            if (percentage >= 100) {
+                color = "green"; // Full target met or exceeded
+            } else if (percentage >= 70) {
+                color = "yellow"; // Getting closer to the target
+            } else if (percentage >= 40) {
+                color = "orange"; // Midway
+            }
+
+            // Apply the color and make the number bold
+            resultElement.innerHTML = `Total: <span style="color: ${color}; font-weight: bold;">${total}</span>`;
+        }
+
+        // HOURLY TARGET LOGIC
+        const HOURLY_TARGET = 155;
+        let startTime; // Time of the very first pick
+        let picksPerHour = []; // Array storing total picks for each hour
+
+        function getCurrentHourIndex() {
+            if (!startTime) return 0;
+            const now = Date.now();
+            const diffMs = now - startTime; 
+            const diffHours = Math.floor(diffMs / 3600000); // integer hours passed
+            return diffHours; 
+        }
+
+        // Recalculate how many have been picked each hour from the entire text
+        function recalcHourlyPicks(lines) {
+            // If no startTime, set it now
+            if (!startTime) {
+                startTime = Date.now();
+                localStorage.setItem('startTime', startTime.toString());
+            }
+            // Reset picksPerHour from stored lines
+            picksPerHour = [];
+            // For each line, figure out which hour it belongs to
+            // We'll keep a running timestamp for each line: We'll assume each line is picked at 'startTime' for simplicity
+            // or we can store a separate timestamp if needed. 
+            // For simplicity, let's treat the entire set as if it's in the "current hour" if startTime is fresh.
+            // More robust logic would store a timestamp per line, but let's do a simpler approach:
+            // We'll store the total as if all picks are in the current hour. 
+            // => We'll meet your "Resets every hour since the first number was picked" by always 
+            // ignoring previous lines once we cross an hour boundary. 
+            // But you asked for a history too, so let's do it properly:
+
+            // We'll keep a timestamp array for each line in localStorage so we know which hour it belongs to.
+
+            // Let's fix the approach so it works each time we parse:
+            // 1. We'll parse the saved 'pickTimestamps' from localStorage to know each line's timestamp, if it exists.
+            let pickTimestamps = JSON.parse(localStorage.getItem('pickTimestamps') || '[]');
+
+            // We'll re-create picksPerHour from the line timestamps
+            // Ensure picksPerHour is large enough to hold all hours up to the largest hour index used
+            pickTimestamps.forEach((tsObj, index) => {
+                const lineValue = parseInt(lines[index].trim().split(' ')[0] || '0', 10);
+                if (isNaN(lineValue)) return; // skip non-numbers
+
+                const hoursSinceStart = Math.floor((tsObj - startTime) / 3600000);
+                picksPerHour[hoursSinceStart] = (picksPerHour[hoursSinceStart] || 0) + lineValue;
+            });
+        }
+
+        // Show how many are left in the current hour
+        function updateHourlyTargetDisplay() {
+            const hourIndex = getCurrentHourIndex();
+            const currentHourPick = picksPerHour[hourIndex] || 0;
+            const left = HOURLY_TARGET - currentHourPick;
+            const hourTargetElem = document.getElementById('hourlyTarget');
+
+            hourTargetElem.innerText = `Hour #${hourIndex}: ` + (left > 0 
+                ? `${left} left` 
+                : `Target Met (${Math.abs(left)} over)`);
+        }
+
+        // On click of #hourlyTarget, show hourly history
+        document.getElementById('hourlyTarget').addEventListener('click', showHourlyHistory);
+
+        function showHourlyHistory() {
+            // build a small summary of each hour
+            let html = "";
+            for (let i = 0; i < picksPerHour.length; i++) {
+                if (picksPerHour[i] == null) continue; // skip empty
+                const val = picksPerHour[i];
+                if (val >= HOURLY_TARGET) {
+                    html += `<p>Hour #${i}: ${val} picked → Reached target! ✅</p>`;
+                } else if (val >= HOURLY_TARGET * 0.8) {
+                    html += `<p>Hour #${i}: ${val} picked → Almost (Needs a bit more) ⚠️</p>`;
+                } else {
+                    html += `<p>Hour #${i}: ${val} picked → Needs Improvement ❌</p>`;
+                }
+            }
+            // If no data, show none
+            if (!html) {
+                html = "<p>No data yet</p>";
+            }
+            document.getElementById('hourlyHistoryContent').innerHTML = html;
+            document.getElementById('hourlyHistory').style.display = 'block';
+        }
+
+        function closeHistory() {
+            document.getElementById('hourlyHistory').style.display = 'none';
+        }
+
+        /* ADD NUMBER OR NEW LINE */
+        function addNumber(num) {
+            const textarea = document.getElementById('pickingNumbers');
+            textarea.value += num; 
+            calculatePicking();
+            showKeyboard();
+        }
+
+        /* MAIN CALCULATION + LOCAL STORAGE */
+        const dailyStorageKey = "pickingNumbers_" + window.location.hostname;
+
+        function calculatePicking() {
+            const input = document.getElementById('pickingNumbers').value;
+            const lines = input.split('\n');
+            let total = 0;
+
+            lines.forEach(line => {
+                // Only the first chunk, ignoring the rest
+                const firstChunk = line.trim().split(' ')[0];
+                const firstNumber = parseInt(firstChunk, 10);
+                if (!isNaN(firstNumber)) {
+                    total += firstNumber;
+                }
+            });
+
+            // Update daily color
+            updateTotalColor(total);
+
+            // Recalc hourly logic
+            recalcHourlyPicks(lines);
+            updateHourlyTargetDisplay();
+            
+            // Save to local storage
+            saveNumbers();
+        }
+
+        function saveNumbers() {
+            const textarea = document.getElementById('pickingNumbers');
+            localStorage.setItem(dailyStorageKey, textarea.value);
+        }
+
+        // We also store timestamps for each line (rough approach):
+        // Each time the user adds a new line, we add a new timestamp to pickTimestamps array.
+        // We'll do that in addTimestampIfNeeded
+        function addTimestampIfNeeded() {
+            const input = document.getElementById('pickingNumbers').value;
+            const lines = input.split('\n');
+            let pickTimestamps = JSON.parse(localStorage.getItem('pickTimestamps') || '[]');
+
+            // If we have more lines than timestamps, add new timestamps for the new lines
+            while (pickTimestamps.length < lines.length) {
+                pickTimestamps.push(Date.now());
+            }
+            localStorage.setItem('pickTimestamps', JSON.stringify(pickTimestamps));
+        }
+
+        document.getElementById('pickingNumbers').addEventListener('input', () => {
+            // Each time user types, possibly new lines appear
+            addTimestampIfNeeded();
+        });
+
+        // Update the Clear button function to also clear the stored data
+        function clearNumbers() {
+            document.getElementById('pickingNumbers').value = '';
+            localStorage.removeItem(dailyStorageKey); // Clear main storage
+            localStorage.removeItem('pickTimestamps');
+            startTime = null; 
+            picksPerHour = [];
+            updateTotalColor(0);
+            updateHourlyTargetDisplay();
+        }
+
+        // Load saved numbers from Local Storage
         window.onload = function() {
-            // Cookie message display check
+            // Cookie check
             if (!document.cookie.includes("cookieAccepted=true")) {
                 document.getElementById('cookieMessage').style.display = 'block';
             }
 
-            // Load saved data from Local Storage
-            const savedData = localStorage.getItem(STORAGE_KEY);
+            const savedData = localStorage.getItem(dailyStorageKey);
             if (savedData) {
                 document.getElementById('pickingNumbers').value = savedData;
-                calculatePicking();
             }
+            // load startTime if present
+            const st = localStorage.getItem('startTime');
+            if (st) {
+                startTime = parseInt(st, 10);
+            }
+            calculatePicking(); // calculates total & sets up everything
         };
+    </script>
 
-        function saveNumbers() {
-            const textarea = document.getElementById('pickingNumbers');
-            localStorage.setItem(STORAGE_KEY, textarea.value);
-        }
+    <script>
+        /* FULLSCREEN: SINGLE TAP = ENTER, TRIPLE TAP = EXIT */
+        let tapCount = 0;
+        let tapTimeout;
 
-        document.getElementById('pickingNumbers').addEventListener('input', saveNumbers);
-
-        /* ======================= ENTER & EXIT FULLSCREEN ======================= */
         document.addEventListener('click', function() {
             tapCount++;
             if (tapCount === 1) {
@@ -232,6 +451,7 @@
                 docEl.webkitRequestFullscreen();
             }
         }
+
         function exitFullscreen() {
             if (document.exitFullscreen) {
                 document.exitFullscreen();
@@ -240,78 +460,11 @@
             }
         }
 
-        /* ======================= COOKIE MESSAGE ======================= */
+        /* COOKIE MESSAGE (Optional) */
         function acknowledgeCookie() {
             document.getElementById('cookieMessage').style.display = 'none';
             document.cookie = "cookieAccepted=true; expires=Fri, 31 Dec 9999 23:59:59 GMT; path=/";
         }
-
-        /* ======================= KEYBOARD SHOW/HIDE ======================= */
-        function showKeyboard() {
-            const kb = document.getElementById('numberKeyboard');
-            kb.style.display = 'grid';
-            const kbHeight = kb.offsetHeight;
-            // Adjust the text container's bottom to be above the keyboard
-            document.getElementById('textContainer').style.bottom = kbHeight + 'px';
-
-            clearTimeout(keyboardTimeout);
-            keyboardTimeout = setTimeout(hideKeyboard, 15000); // Hide after 15s
-        }
-
-        function hideKeyboard() {
-            document.getElementById('numberKeyboard').style.display = 'none';
-            document.getElementById('textContainer').style.bottom = '0';
-        }
-
-        /* ======================= CALCULATE PICKING & DYNAMIC COLOR ======================= */
-        function calculatePicking() {
-            const input = document.getElementById('pickingNumbers').value;
-            const lines = input.split('\n');
-            let total = 0;
-
-            // Only parse the first chunk of each line as an integer
-            lines.forEach(line => {
-                const firstChunk = line.trim().split(' ')[0];
-                const firstNumber = parseInt(firstChunk, 10);
-                if (!isNaN(firstNumber)) {
-                    total += firstNumber;
-                }
-            });
-
-            updateTotalColor(total);
-        }
-
-        function updateTotalColor(total) {
-            const percentage = (total / target) * 100;
-            const resultElement = document.getElementById('result');
-            let color = "red";
-
-            if (percentage >= 100) {
-                color = "green";
-            } else if (percentage >= 70) {
-                color = "yellow";
-            } else if (percentage >= 40) {
-                color = "orange";
-            }
-
-            // Bold color-coded total; keep the "Total:" text the same
-            resultElement.innerHTML = `Total: <span style="color: ${color}; font-weight: bold;">${total}</span>`;
-        }
-
-        /* ======================= ADD NUMBER & CLEAR ======================= */
-        function addNumber(num) {
-            const textarea = document.getElementById('pickingNumbers');
-            textarea.value += num;
-            calculatePicking();
-            showKeyboard(); // Reset the auto-hide timer
-            saveNumbers();  // Immediately save to local storage
-        }
-
-        function clearNumbers() {
-            document.getElementById('pickingNumbers').value = '';
-            localStorage.removeItem(STORAGE_KEY); // Clear from storage
-            calculatePicking();
-        }
     </script>
 </body>
-          </html>
+</html>
