@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Daily Picking Calculator</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        /* ===== BODY & LAYOUT ===== */
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            /* Freed up scrolling control */
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            width: 100vw;
+            background-color: #00427A; /* Kuehne+Nagel Dark Blue */
+            position: relative;
+        }
+
+        /* ===== SCROLLABLE TEXT CONTAINER ===== */
+        #textContainer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            overflow-y: auto;
+            box-sizing: border-box;
+        }
+
+        /* ===== TEXT AREA ===== */
+        #pickingNumbers {
+            width: 100%;
+            min-height: 100%;
+            box-sizing: border-box;
+            border: none;
+            outline: none;
+            font-size: 3em;
+            padding: 10px;
+            resize: none;
+            background-color: rgba(242, 242, 242, 0.9); /* Light Gray with transparency */
+            color: #00427A; /* Kuehne+Nagel Dark Blue Text */
+        }
+
+        /* ===== RESULT DISPLAY (COLORED TOTAL) ===== */
+        #result {
+            position: absolute;
+            top: 40px; /* Moved down ~1cm from the top */
+            right: 10px;
+            background-color: #00A1DE; /* Kuehne+Nagel Light Blue */
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 1.5em;
+            z-index: 100; /* Ensure it stays on top */
+        }
+
+        /* ===== LOGO IN THE MIDDLE (45% DOWN) ===== */
+        #logo {
+            position: fixed;
+            top: 45%; /* Adjusted to appear more centered */
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 0;
+            opacity: 0.1;
+            pointer-events: none; /* Doesn’t interfere with scrolling or taps */
+        }
+
+        /* ===== CUSTOM NUMBER KEYBOARD ===== */
+        #numberKeyboard {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background-color: #00A1DE;
+            display: none; /* Shown via JS */
+            grid-template-columns: repeat(3, 1fr);
+            gap: 5px;
+            padding: 10px;
+            z-index: 10;
+        }
+        #numberKeyboard button {
+            padding: 20px;
+            font-size: 2em;
+            background-color: #F2F2F2;
+            color: #00427A;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        /* ===== COOKIE MESSAGE (OPTIONAL) ===== */
+        #cookieMessage {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            right: 20px;
+            background-color: #00A1DE;
+            color: white;
+            padding: 15px;
+            border-radius: 5px;
+            display: none;
+            z-index: 20;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- RESULT BOX -->
+    <div id="result">Total: 0</div>
+
+    <!-- LOGO (ALWAYS VISIBLE IN THE MIDDLE) -->
+    <img id="logo" src="kn.png" alt="Kuehne+Nagel Logo" width="300">
+
+    <!-- SCROLLABLE CONTAINER & TEXTAREA -->
+    <div id="textContainer">
+        <textarea
+            id="pickingNumbers"
+            placeholder="Enter Picking Numbers..."
+            oninput="calculatePicking()">
+        </textarea>
+    </div>
+
+    <!-- CUSTOM NUMBER KEYBOARD -->
+    <div id="numberKeyboard">
+        <button onclick="addNumber('1')">1</button>
+        <button onclick="addNumber('2')">2</button>
+        <button onclick="addNumber('3')">3</button>
+        <button onclick="addNumber('4')">4</button>
+        <button onclick="addNumber('5')">5</button>
+        <button onclick="addNumber('6')">6</button>
+        <button onclick="addNumber('7')">7</button>
+        <button onclick="addNumber('8')">8</button>
+        <button onclick="addNumber('9')">9</button>
+        <button onclick="addNumber('0')">0</button>
+        <button onclick="addNumber('\n')">Enter</button>
+        <button onclick="clearNumbers()">Clear</button>
+    </div>
+
+    <!-- OPTIONAL COOKIE MESSAGE -->
+    <div id="cookieMessage">
+        Welcome! Tap once to enter Fullscreen. Triple tap to exit. This message won't show again once acknowledged.
+        <button onclick="acknowledgeCookie()" style="background-color: white; color: #00427A; padding: 5px; border: none; cursor: pointer;">OK</button>
+    </div>
+
+    <!-- MAIN SCRIPT: Calculation, Keyboard, Fullscreen, Etc. -->
+    <script>
+        /* ======================= CONSTANTS & INITIAL SETUP ======================= */
+        const target = 1200; // For dynamic color calculation
+        let wakeLock = null; // For preventing screen sleep
+        let keyboardTimeout; // For auto-hiding the keyboard
+        let tapCount = 0;    // For fullscreen logic
+        let tapTimeout;
+
+        /* ======================= PREVENT SCREEN SLEEP ======================= */
+        function preventSleep() {
+            if ('wakeLock' in navigator) {
+                navigator.wakeLock.request('screen')
+                    .then(lock => wakeLock = lock)
+                    .catch(console.error);
+            }
+        }
+        preventSleep();
+
+        // Re-acquire the lock on visibility change
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') {
+                preventSleep();
+            }
+        });
+
+        /* ======================= LOCAL STORAGE (SAVE/LOAD) ======================= */
+        const STORAGE_KEY = "pickingNumbers_" + window.location.hostname;
+
+        window.onload = function() {
+            // Cookie message display check
+            if (!document.cookie.includes("cookieAccepted=true")) {
+                document.getElementById('cookieMessage').style.display = 'block';
+            }
+
+            // Load saved data from Local Storage
+            const savedData = localStorage.getItem(STORAGE_KEY);
+            if (savedData) {
+                document.getElementById('pickingNumbers').value = savedData;
+                calculatePicking();
+            }
+        };
+
+        function saveNumbers() {
+            const textarea = document.getElementById('pickingNumbers');
+            localStorage.setItem(STORAGE_KEY, textarea.value);
+        }
+
+        document.getElementById('pickingNumbers').addEventListener('input', saveNumbers);
+
+        /* ======================= ENTER & EXIT FULLSCREEN ======================= */
+        document.addEventListener('click', function() {
+            tapCount++;
+            if (tapCount === 1) {
+                tapTimeout = setTimeout(() => {
+                    tapCount = 0;
+                    openFullscreen();
+                    // Re-show keyboard after a small delay to avoid glitch
+                    setTimeout(showKeyboard, 300);
+                }, 300);
+            } else if (tapCount === 3) {
+                clearTimeout(tapTimeout);
+                tapCount = 0;
+                exitFullscreen();
+            }
+        });
+
+        function openFullscreen() {
+            const docEl = document.documentElement;
+            if (docEl.requestFullscreen) {
+                docEl.requestFullscreen();
+            } else if (docEl.webkitRequestFullscreen) {
+                docEl.webkitRequestFullscreen();
+            }
+        }
+        function exitFullscreen() {
+            if (document.exitFullscreen) {
+                document.exitFullscreen();
+            } else if (document.webkitExitFullscreen) {
+                document.webkitExitFullscreen();
+            }
+        }
+
+        /* ======================= COOKIE MESSAGE ======================= */
+        function acknowledgeCookie() {
+            document.getElementById('cookieMessage').style.display = 'none';
+            document.cookie = "cookieAccepted=true; expires=Fri, 31 Dec 9999 23:59:59 GMT; path=/";
+        }
+
+        /* ======================= KEYBOARD SHOW/HIDE ======================= */
+        function showKeyboard() {
+            const kb = document.getElementById('numberKeyboard');
+            kb.style.display = 'grid';
+            const kbHeight = kb.offsetHeight;
+            // Adjust the text container's bottom to be above the keyboard
+            document.getElementById('textContainer').style.bottom = kbHeight + 'px';
+
+            clearTimeout(keyboardTimeout);
+            keyboardTimeout = setTimeout(hideKeyboard, 15000); // Hide after 15s
+        }
+
+        function hideKeyboard() {
+            document.getElementById('numberKeyboard').style.display = 'none';
+            document.getElementById('textContainer').style.bottom = '0';
+        }
+
+        /* ======================= CALCULATE PICKING & DYNAMIC COLOR ======================= */
+        function calculatePicking() {
+            const input = document.getElementById('pickingNumbers').value;
+            const lines = input.split('\n');
+            let total = 0;
+
+            // Only parse the first chunk of each line as an integer
+            lines.forEach(line => {
+                const firstChunk = line.trim().split(' ')[0];
+                const firstNumber = parseInt(firstChunk, 10);
+                if (!isNaN(firstNumber)) {
+                    total += firstNumber;
+                }
+            });
+
+            updateTotalColor(total);
+        }
+
+        function updateTotalColor(total) {
+            const percentage = (total / target) * 100;
+            const resultElement = document.getElementById('result');
+            let color = "red";
+
+            if (percentage >= 100) {
+                color = "green";
+            } else if (percentage >= 70) {
+                color = "yellow";
+            } else if (percentage >= 40) {
+                color = "orange";
+            }
+
+            // Bold color-coded total; keep the "Total:" text the same
+            resultElement.innerHTML = `Total: <span style="color: ${color}; font-weight: bold;">${total}</span>`;
+        }
+
+        /* ======================= ADD NUMBER & CLEAR ======================= */
+        function addNumber(num) {
+            const textarea = document.getElementById('pickingNumbers');
+            textarea.value += num;
+            calculatePicking();
+            showKeyboard(); // Reset the auto-hide timer
+            saveNumbers();  // Immediately save to local storage
+        }
+
+        function clearNumbers() {
+            document.getElementById('pickingNumbers').value = '';
+            localStorage.removeItem(STORAGE_KEY); // Clear from storage
+            calculatePicking();
+        }
+    </script>
+</body>
+          </html>
