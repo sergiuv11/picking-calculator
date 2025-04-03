@@ -42,7 +42,7 @@
         }
         #result {
             position: absolute;
-            top: 40px; /* Moved down 1cm from the top */
+            top: 40px; /* Moved down ~1cm from the top */
             right: 10px;
             background-color: #00A1DE; /* Kuehne+Nagel Light Blue */
             color: white;
@@ -51,7 +51,7 @@
             font-size: 1.5em;
             z-index: 100; /* Ensure it stays on top */
         }
-        /* New: container for the hourly info */
+        /* Hourly info container */
         #hourlyTarget {
             position: absolute;
             top: 100px; /* below #result */
@@ -90,13 +90,14 @@
             border-radius: 5px;
             cursor: pointer;
         }
+        /* Logo in the middle, slightly lower, more visible */
         #logo {
             position: fixed;
             top: 45%; /* A bit more down than the center */
             left: 50%;
             transform: translate(-50%, -50%);
             z-index: 0;
-            opacity: 0.15; /* A bit more visible than 0.1 */
+            opacity: 0.15; /* More visible than 0.1 */
             pointer-events: none; /* Ensures the logo doesn't interfere with scrolling or interaction */
         }
         #numberKeyboard {
@@ -138,7 +139,6 @@
 <body>
 
     <div id="result">Total: 0</div>
-    <!-- New container for hourly display -->
     <div id="hourlyTarget">Hour #0: 155 left</div>
     <!-- Hidden overlay for hourly history -->
     <div id="hourlyHistory">
@@ -147,6 +147,7 @@
         <button onclick="closeHistory()">Close</button>
     </div>
 
+    <!-- Make sure kn.png is in the SAME folder as this index.html -->
     <img id="logo" src="kn.png" alt="Kuehne+Nagel Logo" width="300">
 
     <div id="textContainer">
@@ -158,17 +159,17 @@
     </div>
 
     <div id="numberKeyboard">
-        <button onclick="addNumber('1')">1</button>
-        <button onclick="addNumber('2')">2</button>
-        <button onclick="addNumber('3')">3</button>
-        <button onclick="addNumber('4')">4</button>
-        <button onclick="addNumber('5')">5</button>
-        <button onclick="addNumber('6')">6</button>
-        <button onclick="addNumber('7')">7</button>
-        <button onclick="addNumber('8')">8</button>
-        <button onclick="addNumber('9')">9</button>
-        <button onclick="addNumber('0')">0</button>
-        <button onclick="addNumber('\n')">Enter</button>
+        <button onclick="handleNumberEntry('1')">1</button>
+        <button onclick="handleNumberEntry('2')">2</button>
+        <button onclick="handleNumberEntry('3')">3</button>
+        <button onclick="handleNumberEntry('4')">4</button>
+        <button onclick="handleNumberEntry('5')">5</button>
+        <button onclick="handleNumberEntry('6')">6</button>
+        <button onclick="handleNumberEntry('7')">7</button>
+        <button onclick="handleNumberEntry('8')">8</button>
+        <button onclick="handleNumberEntry('9')">9</button>
+        <button onclick="handleNumberEntry('0')">0</button>
+        <button onclick="handleNumberEntry('\n')">Enter</button>
         <button onclick="clearNumbers()">Clear</button>
     </div>
 
@@ -213,7 +214,6 @@
             // Extend container to bottom again
             document.getElementById('textContainer').style.bottom = '0';
         }
-
         document.addEventListener('click', showKeyboard);
 
         /* 
@@ -262,24 +262,10 @@
             }
             // Reset picksPerHour from stored lines
             picksPerHour = [];
-            // For each line, figure out which hour it belongs to
-            // We'll keep a running timestamp for each line: We'll assume each line is picked at 'startTime' for simplicity
-            // or we can store a separate timestamp if needed. 
-            // For simplicity, let's treat the entire set as if it's in the "current hour" if startTime is fresh.
-            // More robust logic would store a timestamp per line, but let's do a simpler approach:
-            // We'll store the total as if all picks are in the current hour. 
-            // => We'll meet your "Resets every hour since the first number was picked" by always 
-            // ignoring previous lines once we cross an hour boundary. 
-            // But you asked for a history too, so let's do it properly:
 
-            // We'll keep a timestamp array for each line in localStorage so we know which hour it belongs to.
-
-            // Let's fix the approach so it works each time we parse:
-            // 1. We'll parse the saved 'pickTimestamps' from localStorage to know each line's timestamp, if it exists.
+            // We'll re-create picksPerHour from 'pickTimestamps' in localStorage
             let pickTimestamps = JSON.parse(localStorage.getItem('pickTimestamps') || '[]');
 
-            // We'll re-create picksPerHour from the line timestamps
-            // Ensure picksPerHour is large enough to hold all hours up to the largest hour index used
             pickTimestamps.forEach((tsObj, index) => {
                 const lineValue = parseInt(lines[index].trim().split(' ')[0] || '0', 10);
                 if (isNaN(lineValue)) return; // skip non-numbers
@@ -301,14 +287,13 @@
                 : `Target Met (${Math.abs(left)} over)`);
         }
 
-        // On click of #hourlyTarget, show hourly history
+        // Show hourly history overlay
         document.getElementById('hourlyTarget').addEventListener('click', showHourlyHistory);
 
         function showHourlyHistory() {
-            // build a small summary of each hour
             let html = "";
             for (let i = 0; i < picksPerHour.length; i++) {
-                if (picksPerHour[i] == null) continue; // skip empty
+                if (picksPerHour[i] == null) continue; 
                 const val = picksPerHour[i];
                 if (val >= HOURLY_TARGET) {
                     html += `<p>Hour #${i}: ${val} picked → Reached target! ✅</p>`;
@@ -318,27 +303,20 @@
                     html += `<p>Hour #${i}: ${val} picked → Needs Improvement ❌</p>`;
                 }
             }
-            // If no data, show none
             if (!html) {
                 html = "<p>No data yet</p>";
             }
             document.getElementById('hourlyHistoryContent').innerHTML = html;
             document.getElementById('hourlyHistory').style.display = 'block';
         }
-
         function closeHistory() {
             document.getElementById('hourlyHistory').style.display = 'none';
         }
 
-        /* ADD NUMBER OR NEW LINE */
-        function addNumber(num) {
-            const textarea = document.getElementById('pickingNumbers');
-            textarea.value += num; 
-            calculatePicking();
-            showKeyboard();
-        }
-
-        /* MAIN CALCULATION + LOCAL STORAGE */
+        /* 
+           MAIN CALCULATION + LOCAL STORAGE
+           Each time the user types, we run calculatePicking() 
+        */
         const dailyStorageKey = "pickingNumbers_" + window.location.hostname;
 
         function calculatePicking() {
@@ -347,7 +325,6 @@
             let total = 0;
 
             lines.forEach(line => {
-                // Only the first chunk, ignoring the rest
                 const firstChunk = line.trim().split(' ')[0];
                 const firstNumber = parseInt(firstChunk, 10);
                 if (!isNaN(firstNumber)) {
@@ -371,27 +348,32 @@
             localStorage.setItem(dailyStorageKey, textarea.value);
         }
 
-        // We also store timestamps for each line (rough approach):
-        // Each time the user adds a new line, we add a new timestamp to pickTimestamps array.
-        // We'll do that in addTimestampIfNeeded
+        // We'll store a timestamp per line in localStorage
         function addTimestampIfNeeded() {
             const input = document.getElementById('pickingNumbers').value;
             const lines = input.split('\n');
             let pickTimestamps = JSON.parse(localStorage.getItem('pickTimestamps') || '[]');
 
-            // If we have more lines than timestamps, add new timestamps for the new lines
+            // If we have more lines than timestamps, add new timestamps for new lines
             while (pickTimestamps.length < lines.length) {
                 pickTimestamps.push(Date.now());
             }
             localStorage.setItem('pickTimestamps', JSON.stringify(pickTimestamps));
         }
 
-        document.getElementById('pickingNumbers').addEventListener('input', () => {
-            // Each time user types, possibly new lines appear
+        // We override the old 'addNumber' approach so each press updates instantly
+        function handleNumberEntry(num) {
+            const textarea = document.getElementById('pickingNumbers');
+            textarea.value += num; 
+            // Immediately store a timestamp for new lines if needed
             addTimestampIfNeeded();
-        });
+            // Calculate picking right away
+            calculatePicking();
+            // Show keyboard again
+            showKeyboard();
+        }
 
-        // Update the Clear button function to also clear the stored data
+        // CLEAR
         function clearNumbers() {
             document.getElementById('pickingNumbers').value = '';
             localStorage.removeItem(dailyStorageKey); // Clear main storage
@@ -402,13 +384,13 @@
             updateHourlyTargetDisplay();
         }
 
-        // Load saved numbers from Local Storage
+        // LOAD on page start
         window.onload = function() {
             // Cookie check
             if (!document.cookie.includes("cookieAccepted=true")) {
                 document.getElementById('cookieMessage').style.display = 'block';
             }
-
+            // Load the saved data
             const savedData = localStorage.getItem(dailyStorageKey);
             if (savedData) {
                 document.getElementById('pickingNumbers').value = savedData;
@@ -418,7 +400,8 @@
             if (st) {
                 startTime = parseInt(st, 10);
             }
-            calculatePicking(); // calculates total & sets up everything
+            // Trigger initial calc
+            calculatePicking();
         };
     </script>
 
